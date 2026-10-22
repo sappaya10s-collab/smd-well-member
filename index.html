@@ -193,13 +193,28 @@
           throw new Error(result.message || 'ไม่สามารถบันทึกข้อมูลได้');
         }
 
+
         if (result.status === 'success') {
-          showStatus('สมัครสมาชิกสำเร็จ บันทึกข้อมูลเรียบร้อยแล้ว', 'success');
+          if (result.cardSent === true) {
+            showStatus(
+              'สมัครสมาชิกสำเร็จ และระบบส่งการ์ดต้อนรับเข้า LINE แล้ว',
+              'success'
+            );
+          } else {
+            showStatus(
+              'บันทึกสมาชิกสำเร็จ แต่ส่งการ์ดไม่สำเร็จ: ' +
+              (result.cardMessage || 'API ไม่ได้แจ้งสาเหตุ กรุณาตรวจสอบ Cloudflare'),
+              'error'
+            );
+          }
+        
           form.reset();
           displayNameInput.value = lineProfile.displayName || '';
           firstnameInput.disabled = true;
           lastnameInput.disabled = true;
           submitBtn.textContent = 'สมัครสมาชิกสำเร็จ';
+        }
+
         } else if (result.status === 'duplicate') {
           showStatus('LINE นี้สมัครสมาชิกแล้ว ไม่ต้องสมัครซ้ำค่ะ', 'info');
           submitBtn.textContent = 'สมัครสมาชิกแล้ว';
