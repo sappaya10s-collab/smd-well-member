@@ -5,9 +5,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>สมัครสมาชิก SMD Well</title>
+
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
   <style>
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       padding: 24px 16px;
@@ -15,6 +18,7 @@
       color: #24334a;
       font-family: Arial, sans-serif;
     }
+
     .container {
       max-width: 460px;
       margin: 20px auto;
@@ -23,22 +27,26 @@
       border-radius: 18px;
       box-shadow: 0 5px 22px #1b365015;
     }
+
     h1 {
       margin: 0 0 8px;
       text-align: center;
       color: #235b8e;
       font-size: 25px;
     }
+
     .subtitle {
       text-align: center;
       color: #68788b;
       margin-bottom: 24px;
     }
+
     label {
       display: block;
       margin: 16px 0 7px;
       font-weight: bold;
     }
+
     input {
       width: 100%;
       padding: 13px;
@@ -46,7 +54,11 @@
       border-radius: 9px;
       font-size: 16px;
     }
+
     input[readonly] { background: #f1f5f9; }
+
+    input:disabled { color: #64748b; }
+
     button {
       width: 100%;
       margin-top: 24px;
@@ -59,7 +71,12 @@
       font-weight: bold;
       cursor: pointer;
     }
-    button:disabled { opacity: .55; cursor: not-allowed; }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
     #status {
       margin-top: 18px;
       padding: 12px;
@@ -67,12 +84,13 @@
       line-height: 1.6;
       overflow-wrap: anywhere;
     }
-    .hidden { display: none; }
+
     .success { background: #e6f7ed; color: #17643a; }
     .error { background: #fff0f0; color: #a32929; }
     .info { background: #edf5ff; color: #245486; }
   </style>
 </head>
+
 <body>
   <main class="container">
     <h1>SMD Well</h1>
@@ -80,17 +98,31 @@
 
     <form id="memberForm">
       <label for="displayName">ชื่อโปรไฟล์ LINE</label>
-      <input id="displayName" readonly placeholder="กำลังเชื่อมต่อ LINE...">
+      <input
+        id="displayName"
+        readonly
+        placeholder="กำลังเชื่อมต่อ LINE..."
+      >
 
       <label for="firstname">ชื่อจริง *</label>
-      <input id="firstname" name="firstname"
-             autocomplete="given-name" required maxlength="100"
-             placeholder="กรอกชื่อจริง">
+      <input
+        id="firstname"
+        name="firstname"
+        autocomplete="given-name"
+        required
+        maxlength="100"
+        placeholder="กรอกชื่อจริง"
+      >
 
       <label for="lastname">นามสกุล *</label>
-      <input id="lastname" name="lastname"
-             autocomplete="family-name" required maxlength="100"
-             placeholder="กรอกนามสกุล">
+      <input
+        id="lastname"
+        name="lastname"
+        autocomplete="family-name"
+        required
+        maxlength="100"
+        placeholder="กรอกนามสกุล"
+      >
 
       <button id="submitBtn" type="submit" disabled>
         กำลังเชื่อมต่อ LINE...
@@ -116,34 +148,91 @@
 
     let lineProfile = null;
     let isSubmitting = false;
+    let isRegistered = false;
 
     function showStatus(message, type = 'info') {
       statusBox.textContent = message;
       statusBox.className = type;
     }
 
-    async function initLiff() {
-      try {
-        showStatus('กำลังเชื่อมต่อ LINE...');
+    // ป้องกันการรอเชื่อมต่อโดยไม่มีข้อความแจ้งเตือน
+    function withTimeout(promise, milliseconds, message) {
+      let timer;
 
-        await liff.init({ liffId: LIFF_ID });
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(message)),
+            milliseconds
+          );
+        })
+      ]).finally(() => clearTimeout(timer));
+    }
+
+    async function initLiff() {
+      submitBtn.disabled = true;
+      showStatus('กำลังตรวจสอบการเชื่อมต่อ LINE...');
+
+      try {
+        if (typeof liff === 'undefined') {
+          throw new Error(
+            'โหลด LINE LIFF SDK ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต'
+          );
+        }
+
+        await withTimeout(
+          liff.init({ liffId: LIFF_ID }),
+          15000,
+          'เริ่มต้น LIFF ไม่สำเร็จภายใน 15 วินาที'
+        );
 
         if (!liff.isLoggedIn()) {
-          liff.login();
+          showStatus('กำลังเข้าสู่ระบบ LINE...');
+
+          liff.login({
+            redirectUri: window.location.href
+          });
+
           return;
         }
 
-        lineProfile = await liff.getProfile();
+        showStatus('เชื่อมต่อแล้ว กำลังโหลดโปรไฟล์ LINE...');
+
+        lineProfile = await withTimeout(
+          liff.getProfile(),
+          15000,
+          'ดึงโปรไฟล์ LINE ไม่สำเร็จภายใน 15 วินาที'
+        );
+
+        if (!lineProfile || !lineProfile.userId) {
+          throw new Error(
+            'ไม่พบ LINE User ID กรุณาตรวจสอบสิทธิ์ LIFF'
+          );
+        }
+
         displayNameInput.value = lineProfile.displayName || '';
 
         submitBtn.disabled = false;
         submitBtn.textContent = 'สมัครสมาชิก';
 
-        showStatus('เชื่อมต่อ LINE สำเร็จ กรุณากรอกชื่อและนามสกุล');
-      } catch (error) {
-        console.error('LIFF error:', error);
         showStatus(
-          'เชื่อมต่อ LINE ไม่สำเร็จ กรุณาเปิดผ่านลิงก์ LIFF แล้วลองใหม่',
+          'เชื่อมต่อ LINE สำเร็จ กรุณากรอกชื่อจริงและนามสกุล',
+          'success'
+        );
+
+      } catch (error) {
+        console.error('LIFF initialization error:', error);
+
+        lineProfile = null;
+        displayNameInput.value = '';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'เชื่อมต่อ LINE ไม่สำเร็จ';
+
+        showStatus(
+          'เชื่อมต่อ LINE ไม่สำเร็จ: ' +
+          (error.message || 'เกิดข้อผิดพลาด') +
+          ' กรุณาลองเปิดใหม่ผ่านลิงก์ LIFF',
           'error'
         );
       }
@@ -152,10 +241,13 @@
     form.addEventListener('submit', async function(event) {
       event.preventDefault();
 
-      if (isSubmitting) return;
+      if (isSubmitting || isRegistered) return;
 
-      if (!lineProfile || !liff.isLoggedIn()) {
-        showStatus('กรุณาเข้าสู่ระบบ LINE ก่อนสมัครสมาชิก', 'error');
+      if (!lineProfile) {
+        showStatus(
+          'ยังเชื่อมต่อ LINE ไม่สำเร็จ กรุณาโหลดหน้าใหม่',
+          'error'
+        );
         return;
       }
 
@@ -173,28 +265,47 @@
       showStatus('กำลังบันทึกข้อมูลสมาชิก กรุณารอสักครู่');
 
       try {
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const response = await withTimeout(
+          fetch(API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              displayName: lineProfile.displayName || '',
+              firstname: firstname,
+              lastname: lastname,
+              lineUserId: lineProfile.userId,
+              profileImageUrl: lineProfile.pictureUrl || ''
+            })
+          }),
+          30000,
+          'รอ API นานเกิน 30 วินาที กรุณาตรวจสอบ Cloudflare'
+        );
 
-          body: JSON.stringify({
-            displayName: lineProfile.displayName || '',
-            firstname: firstname,
-            lastname: lastname,
-            lineUserId: lineProfile.userId
-            profileImageUrl: lineProfile.pictureUrl || ''
-          })
+        const responseText = await response.text();
+        let result;
 
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.message || 'ไม่สามารถบันทึกข้อมูลได้');
+        try {
+          result = JSON.parse(responseText);
+        } catch (_) {
+          throw new Error(
+            'API ตอบกลับข้อมูลไม่ใช่ JSON (HTTP ' +
+            response.status + ')'
+          );
         }
 
+        if (!response.ok) {
+          throw new Error(
+            result.message ||
+            result.cardMessage ||
+            'API ตอบกลับ HTTP ' + response.status
+          );
+        }
 
         if (result.status === 'success') {
+          isRegistered = true;
+
           if (result.cardSent === true) {
             showStatus(
               'สมัครสมาชิกสำเร็จ และระบบส่งการ์ดต้อนรับเข้า LINE แล้ว',
@@ -203,33 +314,42 @@
           } else {
             showStatus(
               'บันทึกสมาชิกสำเร็จ แต่ส่งการ์ดไม่สำเร็จ: ' +
-              (result.cardMessage || 'API ไม่ได้แจ้งสาเหตุ กรุณาตรวจสอบ Cloudflare'),
+              (result.cardMessage ||
+                'กรุณาตรวจสอบ Cloudflare Worker Logs'),
               'error'
             );
           }
-        
-          form.reset();
-          displayNameInput.value = lineProfile.displayName || '';
+
           firstnameInput.disabled = true;
           lastnameInput.disabled = true;
           submitBtn.textContent = 'สมัครสมาชิกสำเร็จ';
-        }
 
         } else if (result.status === 'duplicate') {
-          showStatus('LINE นี้สมัครสมาชิกแล้ว ไม่ต้องสมัครซ้ำค่ะ', 'info');
+          showStatus(
+            'LINE นี้สมัครสมาชิกแล้ว ไม่ต้องสมัครซ้ำค่ะ',
+            'info'
+          );
           submitBtn.textContent = 'สมัครสมาชิกแล้ว';
+
         } else {
-          throw new Error(result.message || 'บันทึกข้อมูลไม่สำเร็จ');
+          throw new Error(
+            result.message || 'บันทึกข้อมูลไม่สำเร็จ'
+          );
         }
+
       } catch (error) {
         console.error('Submit error:', error);
+
         showStatus(
-          'บันทึกไม่สำเร็จ: ' + (error.message || 'เกิดข้อผิดพลาด') +
+          'บันทึกไม่สำเร็จ: ' +
+          (error.message || 'เกิดข้อผิดพลาด') +
           ' กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่',
           'error'
         );
+
         submitBtn.disabled = false;
         submitBtn.textContent = 'ลองบันทึกอีกครั้ง';
+
       } finally {
         isSubmitting = false;
       }
