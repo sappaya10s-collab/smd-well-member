@@ -93,12 +93,179 @@ export default {
         }, 502);
       }
 
-      return json(result);
-    } catch (error) {
-      return json({
-        status: "error",
-        message: "เกิดข้อผิดพลาดในการเชื่อมต่อ API"
-      }, 500);
+
+      // ส่งการ์ดเฉพาะเมื่อบันทึกสมาชิกสำเร็จ
+      if (result.status !== "success") {
+        return json(result);
+      }
+
+      if (!env.LINE_CHANNEL_ACCESS_TOKEN) {
+        return json({
+          ...result,
+          cardSent: false,
+          cardMessage: "ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN"
+        });
+      }
+
+      const profileImageUrl = String(body.profileImageUrl || "").trim();
+      const fullName = `${firstname} ${lastname}`;
+
+      const cardContents = [
+        {
+          type: "text",
+          text: "BETTER HEALTH, BRIGHTER YOU",
+          size: "xs",
+          color: "#6B8C70",
+          align: "center",
+          weight: "bold",
+          wrap: true
+        }
+      ];
+
+      // ใช้รูปโปรไฟล์ LINE ถ้ามี
+      if (/^https:\/\/.+/i.test(profileImageUrl)) {
+        cardContents.push({
+          type: "image",
+          url: profileImageUrl,
+          size: "100px",
+          aspectRatio: "1:1",
+          aspectMode: "cover",
+          align: "center",
+          cornerRadius: "xxl",
+          margin: "lg"
+        });
+      }
+
+      cardContents.push(
+        {
+          type: "text",
+          text: fullName,
+          size: "xl",
+          weight: "bold",
+          color: "#294D40",
+          align: "center",
+          wrap: true,
+          margin: "lg"
+        },
+        {
+          type: "separator",
+          color: "#91AD91",
+          margin: "xl"
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          backgroundColor: "#E8EFDC",
+          cornerRadius: "xxl",
+          paddingAll: "lg",
+          margin: "xl",
+          justifyContent: "center",
+          alignItems: "center",
+          contents: [
+            {
+              type: "text",
+              text: "✓",
+              size: "xl",
+              weight: "bold",
+              color: "#568C60",
+              flex: 0
+            },
+            {
+              type: "text",
+              text: "ลงทะเบียนสำเร็จ",
+              size: "lg",
+              weight: "bold",
+              color: "#315B40",
+              margin: "md",
+              flex: 0,
+              wrap: true
+            }
+          ]
+        },
+        {
+          type: "text",
+          text: "ขอบคุณที่ให้ความสนใจ\nเรายินดีต้อนรับคุณเข้าสู่ครอบครัวของเรา ♡",
+          size: "sm",
+          color: "#69756C",
+          align: "center",
+          wrap: true,
+          margin: "xl"
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          spacing: "sm",
+          margin: "xl",
+          contents: [
+            { type: "text", text: "🌿\nHEALTH", size: "xxs", color: "#63866A", align: "center", flex: 1, wrap: true },
+            { type: "text", text: "♡\nWELLNESS", size: "xxs", color: "#63866A", align: "center", flex: 1, wrap: true },
+            { type: "text", text: "☼\nBALANCE", size: "xxs", color: "#63866A", align: "center", flex: 1, wrap: true },
+            { type: "text", text: "♧\nHAPPINESS", size: "xxs", color: "#63866A", align: "center", flex: 1, wrap: true }
+          ]
+        },
+        {
+          type: "text",
+          text: "YOUR WELLNESS JOURNEY STARTS HERE",
+          size: "xxs",
+          color: "#8A9B86",
+          align: "center",
+          wrap: true,
+          margin: "xl"
+        }
+      );
+
+      const flexMessage = {
+        type: "flex",
+        altText: "ยินดีต้อนรับสู่ SMD Well Member",
+        contents: {
+          type: "bubble",
+          size: "kilo",
+          body: {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#FFFDF8",
+            paddingAll: "22px",
+            contents: cardContents
+          }
+        }
+      };
+
+      try {
+        const lineResponse = await fetch(
+          "https://api.line.me/v2/bot/message/push",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({
+              to: lineUserId,
+              messages: [flexMessage]
+            })
+          }
+        );
+
+        if (!lineResponse.ok) {
+          return json({
+            ...result,
+            cardSent: false,
+            cardMessage: `บันทึกสมาชิกแล้ว แต่ LINE ส่งการ์ดไม่สำเร็จ (HTTP ${lineResponse.status})`
+          });
+        }
+
+        return json({
+          ...result,
+          cardSent: true
+        });
+
+      } catch (lineError) {
+        return json({
+          ...result,
+          cardSent: false,
+          cardMessage: "บันทึกสมาชิกแล้ว แต่เชื่อมต่อ LINE เพื่อส่งการ์ดไม่สำเร็จ"
+        });
+      }
     }
   }
 };
