@@ -4,105 +4,220 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SMD Well Member</title>
-
-  <script
-    charset="utf-8"
-    src="https://static.line-scdn.net/liff/edge/versions/2.31.1/sdk.js">
-  </script>
-
+  <title>สมัครสมาชิก SMD Well</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
+    * { box-sizing: border-box; }
     body {
-      font-family: sans-serif;
-      padding: 24px;
-      line-height: 1.6;
-      color: #333;
+      margin: 0;
+      padding: 24px 16px;
+      background: #f2f6fb;
+      color: #24334a;
+      font-family: Arial, sans-serif;
     }
-
-    h2 {
-      color: #3559a6;
+    .container {
+      max-width: 460px;
+      margin: 20px auto;
+      padding: 26px 22px;
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 5px 22px #1b365015;
     }
-
-    button {
-      padding: 12px 20px;
-      border: 0;
-      border-radius: 8px;
-      background: #06c755;
-      color: white;
+    h1 {
+      margin: 0 0 8px;
+      text-align: center;
+      color: #235b8e;
+      font-size: 25px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #68788b;
+      margin-bottom: 24px;
+    }
+    label {
+      display: block;
+      margin: 16px 0 7px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 13px;
+      border: 1px solid #cbd5e1;
+      border-radius: 9px;
       font-size: 16px;
+    }
+    input[readonly] { background: #f1f5f9; }
+    button {
+      width: 100%;
+      margin-top: 24px;
+      padding: 14px;
+      border: 0;
+      border-radius: 10px;
+      background: #2368a0;
+      color: white;
+      font-size: 17px;
+      font-weight: bold;
       cursor: pointer;
     }
-
-    pre {
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      background: #f4f6f8;
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    #status {
+      margin-top: 18px;
       padding: 12px;
       border-radius: 8px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
     }
+    .hidden { display: none; }
+    .success { background: #e6f7ed; color: #17643a; }
+    .error { background: #fff0f0; color: #a32929; }
+    .info { background: #edf5ff; color: #245486; }
   </style>
 </head>
-
 <body>
-  <h2>SMD Well Member</h2>
-  <p>ทดสอบการเชื่อมต่อ LINE Login</p>
+  <main class="container">
+    <h1>SMD Well</h1>
+    <p class="subtitle">แบบฟอร์มสมัครสมาชิก</p>
 
-  <pre id="status">กำลังโหลดหน้าเว็บ...</pre>
+    <form id="memberForm">
+      <label for="displayName">ชื่อโปรไฟล์ LINE</label>
+      <input id="displayName" readonly placeholder="กำลังเชื่อมต่อ LINE...">
 
-  <button id="loginButton" hidden>
-    เข้าสู่ระบบ LINE
-  </button>
+      <label for="firstname">ชื่อจริง *</label>
+      <input id="firstname" name="firstname"
+             autocomplete="given-name" required maxlength="100"
+             placeholder="กรอกชื่อจริง">
+
+      <label for="lastname">นามสกุล *</label>
+      <input id="lastname" name="lastname"
+             autocomplete="family-name" required maxlength="100"
+             placeholder="กรอกนามสกุล">
+
+      <button id="submitBtn" type="submit" disabled>
+        กำลังเชื่อมต่อ LINE...
+      </button>
+    </form>
+
+    <div id="status" class="info" role="status" aria-live="polite">
+      กำลังเริ่มต้นระบบ...
+    </div>
+  </main>
 
   <script>
-    const status = document.getElementById("status");
-    const loginButton = document.getElementById("loginButton");
+    const LIFF_ID = '2012073685-jODsjAsW';
+    const API_URL =
+      'https://smd-well-member-api.sappaya10s.workers.dev/';
 
-    function show(message) {
-      status.textContent += "\n" + message;
+    const form = document.getElementById('memberForm');
+    const displayNameInput = document.getElementById('displayName');
+    const firstnameInput = document.getElementById('firstname');
+    const lastnameInput = document.getElementById('lastname');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusBox = document.getElementById('status');
+
+    let lineProfile = null;
+    let isSubmitting = false;
+
+    function showStatus(message, type = 'info') {
+      statusBox.textContent = message;
+      statusBox.className = type;
     }
 
-    async function startLIFF() {
+    async function initLiff() {
       try {
-        show("กำลังตรวจสอบ LIFF SDK...");
+        showStatus('กำลังเชื่อมต่อ LINE...');
 
-        if (typeof liff === "undefined") {
-          throw new Error("โหลด LIFF SDK ไม่สำเร็จ");
+        await liff.init({ liffId: LIFF_ID });
+
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
         }
 
-        show("กำลังเริ่มต้น LIFF...");
+        lineProfile = await liff.getProfile();
+        displayNameInput.value = lineProfile.displayName || '';
 
-        await liff.init({
-          liffId: "2012073685-jODsjAsW"
-        });
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'สมัครสมาชิก';
 
-        show("LIFF INIT SUCCESS");
-        show("URL: " + location.href);
-        show("isInClient: " + liff.isInClient());
-        show("isLoggedIn: " + liff.isLoggedIn());
-
-        if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-
-          show("เข้าสู่ระบบสำเร็จ");
-          show("ชื่อสมาชิก: " + profile.displayName);
-          show("User ID: " + profile.userId);
-        } else {
-          show("ยังไม่ได้เข้าสู่ระบบ");
-          loginButton.hidden = false;
-        }
+        showStatus('เชื่อมต่อ LINE สำเร็จ กรุณากรอกชื่อและนามสกุล');
       } catch (error) {
-        show("ERROR: " + (error.message || String(error)));
-        console.error(error);
+        console.error('LIFF error:', error);
+        showStatus(
+          'เชื่อมต่อ LINE ไม่สำเร็จ กรุณาเปิดผ่านลิงก์ LIFF แล้วลองใหม่',
+          'error'
+        );
       }
     }
 
-    loginButton.addEventListener("click", function () {
-      liff.login({
-        redirectUri: location.href
-      });
+    form.addEventListener('submit', async function(event) {
+      event.preventDefault();
+
+      if (isSubmitting) return;
+
+      if (!lineProfile || !liff.isLoggedIn()) {
+        showStatus('กรุณาเข้าสู่ระบบ LINE ก่อนสมัครสมาชิก', 'error');
+        return;
+      }
+
+      const firstname = firstnameInput.value.trim();
+      const lastname = lastnameInput.value.trim();
+
+      if (!firstname || !lastname) {
+        showStatus('กรุณากรอกชื่อจริงและนามสกุลให้ครบ', 'error');
+        return;
+      }
+
+      isSubmitting = true;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'กำลังบันทึกข้อมูล...';
+      showStatus('กำลังบันทึกข้อมูลสมาชิก กรุณารอสักครู่');
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            displayName: lineProfile.displayName || '',
+            firstname: firstname,
+            lastname: lastname,
+            lineUserId: lineProfile.userId
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message || 'ไม่สามารถบันทึกข้อมูลได้');
+        }
+
+        if (result.status === 'success') {
+          showStatus('สมัครสมาชิกสำเร็จ บันทึกข้อมูลเรียบร้อยแล้ว', 'success');
+          form.reset();
+          displayNameInput.value = lineProfile.displayName || '';
+          firstnameInput.disabled = true;
+          lastnameInput.disabled = true;
+          submitBtn.textContent = 'สมัครสมาชิกสำเร็จ';
+        } else if (result.status === 'duplicate') {
+          showStatus('LINE นี้สมัครสมาชิกแล้ว ไม่ต้องสมัครซ้ำค่ะ', 'info');
+          submitBtn.textContent = 'สมัครสมาชิกแล้ว';
+        } else {
+          throw new Error(result.message || 'บันทึกข้อมูลไม่สำเร็จ');
+        }
+      } catch (error) {
+        console.error('Submit error:', error);
+        showStatus(
+          'บันทึกไม่สำเร็จ: ' + (error.message || 'เกิดข้อผิดพลาด') +
+          ' กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่',
+          'error'
+        );
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'ลองบันทึกอีกครั้ง';
+      } finally {
+        isSubmitting = false;
+      }
     });
 
-    startLIFF();
+    initLiff();
   </script>
 </body>
 </html>
