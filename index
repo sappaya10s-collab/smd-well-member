@@ -1,0 +1,108 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SMD Well Member</title>
+
+  <script
+    charset="utf-8"
+    src="https://static.line-scdn.net/liff/edge/versions/2.31.1/sdk.js">
+  </script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 24px;
+      line-height: 1.6;
+      color: #333;
+    }
+
+    h2 {
+      color: #3559a6;
+    }
+
+    button {
+      padding: 12px 20px;
+      border: 0;
+      border-radius: 8px;
+      background: #06c755;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: #f4f6f8;
+      padding: 12px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>SMD Well Member</h2>
+  <p>ทดสอบการเชื่อมต่อ LINE Login</p>
+
+  <pre id="status">กำลังโหลดหน้าเว็บ...</pre>
+
+  <button id="loginButton" hidden>
+    เข้าสู่ระบบ LINE
+  </button>
+
+  <script>
+    const status = document.getElementById("status");
+    const loginButton = document.getElementById("loginButton");
+
+    function show(message) {
+      status.textContent += "\n" + message;
+    }
+
+    async function startLIFF() {
+      try {
+        show("กำลังตรวจสอบ LIFF SDK...");
+
+        if (typeof liff === "undefined") {
+          throw new Error("โหลด LIFF SDK ไม่สำเร็จ");
+        }
+
+        show("กำลังเริ่มต้น LIFF...");
+
+        await liff.init({
+          liffId: "2012073685-jODsjAsW"
+        });
+
+        show("LIFF INIT SUCCESS");
+        show("URL: " + location.href);
+        show("isInClient: " + liff.isInClient());
+        show("isLoggedIn: " + liff.isLoggedIn());
+
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+
+          show("เข้าสู่ระบบสำเร็จ");
+          show("ชื่อสมาชิก: " + profile.displayName);
+          show("User ID: " + profile.userId);
+        } else {
+          show("ยังไม่ได้เข้าสู่ระบบ");
+          loginButton.hidden = false;
+        }
+      } catch (error) {
+        show("ERROR: " + (error.message || String(error)));
+        console.error(error);
+      }
+    }
+
+    loginButton.addEventListener("click", function () {
+      liff.login({
+        redirectUri: location.href
+      });
+    });
+
+    startLIFF();
+  </script>
+</body>
+</html>
