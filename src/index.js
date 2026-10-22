@@ -1,6 +1,10 @@
 
 export default {
   async fetch(request, env) {
+    // ==========================================
+    // 1. CONFIGURATION
+    // ==========================================
+
     const allowedOrigin =
       "https://smd-well-member-site.sappaya10s.workers.dev";
 
@@ -21,6 +25,10 @@ export default {
       });
     }
 
+    // ==========================================
+    // 2. CORS
+    // ==========================================
+
     if (request.method === "OPTIONS") {
       if (origin !== allowedOrigin) {
         return new Response(null, { status: 403 });
@@ -39,12 +47,27 @@ export default {
       }, 403);
     }
 
-    if (request.method !== "POST") {
+    // ==========================================
+    // 3. HEALTH CHECK
+    // ==========================================
+
+    if (request.method === "GET") {
       return json({
         status: "success",
         message: "SMD Well Member API is running"
       });
     }
+
+    if (request.method !== "POST") {
+      return json({
+        status: "error",
+        message: "Method not allowed"
+      }, 405);
+    }
+
+    // ==========================================
+    // 4. CHECK ENVIRONMENT VARIABLES
+    // ==========================================
 
     if (!env.GAS_URL || !env.API_SECRET) {
       return json({
@@ -54,21 +77,65 @@ export default {
     }
 
     try {
-      const body = await request.json();
+      // ========================================
+      // 5. READ REQUEST BODY
+      // ========================================
 
-      const displayName = String(body.displayName || "").trim();
-      const firstname = String(body.firstname || "").trim();
-      const lastname = String(body.lastname || "").trim();
-      const lineUserId = String(body.lineUserId || "").trim();
+      let body;
+
+      try {
+        body = await request.json();
+      } catch {
+        return json({
+          status: "error",
+          message: "รูปแบบข้อมูล JSON ไม่ถูกต้อง"
+        }, 400);
+      }
+
+      const displayName =
+        String(body.displayName || "").trim();
+
+      const firstname =
+        String(body.firstname || "").trim();
+
+      const lastname =
+        String(body.lastname || "").trim();
+
+      const lineUserId =
+        String(body.lineUserId || "").trim();
+
+      const profileImageUrl =
+        String(body.profileImageUrl || "").trim();
+
+      // ========================================
+      // 6. VALIDATE MEMBER DATA
+      // ========================================
 
       if (!firstname || !lastname || !lineUserId) {
         return json({
           status: "error",
-          message: "กรุณากรอกชื่อ นามสกุล และข้อมูล LINE ให้ครบ"
+          message:
+            "กรุณากรอกชื่อ นามสกุล และข้อมูล LINE ให้ครบ"
         }, 400);
       }
 
-      // 1. บันทึกข้อมูลผ่าน Google Apps Script
+      // ตรวจสอบรูปโปรไฟล์ HTTPS
+      let validProfileImageUrl = "";
+
+      try {
+        const imageUrl = new URL(profileImageUrl);
+
+        if (imageUrl.protocol === "https:") {
+          validProfileImageUrl = imageUrl.href;
+        }
+      } catch {
+        validProfileImageUrl = "";
+      }
+
+      // ========================================
+      // 7. SAVE MEMBER TO GOOGLE SHEETS
+      // ========================================
+
       const gasResponse = await fetch(env.GAS_URL, {
         method: "POST",
         headers: {
@@ -90,58 +157,101 @@ export default {
       try {
         result = JSON.parse(responseText);
       } catch {
+        console.error(
+          "Invalid Google Apps Script response:",
+          responseText.slice(0, 500)
+        );
+
         return json({
           status: "error",
-          message: "Google Apps Script ตอบกลับไม่ใช่ JSON"
+          message:
+            "Google Apps Script ตอบกลับไม่ใช่ JSON"
         }, 502);
       }
 
       if (!gasResponse.ok) {
         return json({
           status: "error",
-          message: result.message ||
+          message:
+            result.message ||
             "Google Apps Script request failed"
         }, 502);
       }
 
-      // 2. ส่งการ์ดเฉพาะสมาชิกที่ลงทะเบียนสำเร็จ
+      // ต้องบันทึกสำเร็จก่อนจึงส่งการ์ด
       if (result.status !== "success") {
         return json(result);
       }
+
+      // ========================================
+      // 8. CHECK LINE CHANNEL ACCESS TOKEN
+      // ========================================
 
       if (!env.LINE_CHANNEL_ACCESS_TOKEN) {
         return json({
           ...result,
           cardSent: false,
           cardMessage:
-            "ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN"
+            "บันทึกสมาชิกสำเร็จ แต่ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN"
         });
       }
 
-      const profileImageUrl =
-        String(body.profileImageUrl || "").trim();
+      // ========================================
+      // 9. PREPARE PROFILE AND MEMBER NAME
+      // ========================================
 
-      const fullName = `${firstname} ${lastname}`;
+      const lineDisplayName =
+        displayName || "สมาชิก SMD Well";
 
-      // 3. สร้างเนื้อหาการ์ด Flex Message
+      const fullName =
+        `${firstname} ${lastname}`;
+
+      // ========================================
+      // 10. BUILD FLEX MESSAGE CARD
+      // ========================================
+
       const cardContents = [
         {
           type: "text",
-          text: "BETTER HEALTH, BRIGHTER YOU",
-          size: "xs",
-          color: "#6B8C70",
+          text: "WELCOME TO",
+          size: "sm",
+          color: "#8A9B86",
           align: "center",
           weight: "bold",
-          wrap: true
+          margin: "sm"
+        },
+        {
+          type: "text",
+          text: "SMD WELL",
+          size: "3xl",
+          weight: "bold",
+          color: "#294D40",
+          align: "center",
+          wrap: true,
+          margin: "sm"
+        },
+        {
+          type: "text",
+          text: "MEMBER",
+          size: "sm",
+          color: "#63866A",
+          align: "center",
+          weight: "bold",
+          margin: "xs"
+        },
+        {
+          type: "separator",
+          color: "#DCE8DC",
+          margin: "lg"
         }
       ];
 
-      // เพิ่มรูปโปรไฟล์เมื่อมี URL HTTPS
-      if (/^https:\/\/.+/i.test(profileImageUrl)) {
+      // รูปโปรไฟล์ LINE แสดงบนการ์ด
+      if (validProfileImageUrl) {
         cardContents.push({
           type: "image",
-          url: profileImageUrl,
-          size: "100px",
+          url: validProfileImageUrl,
+          size: "xl",
           aspectRatio: "1:1",
           aspectMode: "cover",
           align: "center",
@@ -149,10 +259,11 @@ export default {
         });
       }
 
+      // ชื่อโปรไฟล์และชื่อสมาชิก
       cardContents.push(
         {
           type: "text",
-          text: fullName,
+          text: lineDisplayName,
           size: "xl",
           weight: "bold",
           color: "#294D40",
@@ -161,39 +272,18 @@ export default {
           margin: "lg"
         },
         {
-          type: "separator",
-          color: "#91AD91",
-          margin: "xl"
+          type: "text",
+          text: `สมาชิก ${fullName}`,
+          size: "sm",
+          color: "#69756C",
+          align: "center",
+          wrap: true,
+          margin: "sm"
         },
         {
-          type: "box",
-          layout: "horizontal",
-          backgroundColor: "#E8EFDC",
-          cornerRadius: "xxl",
-          paddingAll: "lg",
-          margin: "xl",
-          justifyContent: "center",
-          alignItems: "center",
-          contents: [
-            {
-              type: "text",
-              text: "✓",
-              size: "xl",
-              weight: "bold",
-              color: "#568C60",
-              flex: 0
-            },
-            {
-              type: "text",
-              text: "ลงทะเบียนสำเร็จ",
-              size: "lg",
-              weight: "bold",
-              color: "#315B40",
-              margin: "md",
-              flex: 0,
-              wrap: true
-            }
-          ]
+          type: "separator",
+          color: "#DCE8DC",
+          margin: "xl"
         },
         {
           type: "text",
@@ -277,7 +367,10 @@ export default {
         }
       };
 
-      // 4. ส่งการ์ดไปยัง LINE User ID
+      // ========================================
+      // 11. PUSH WELCOME CARD TO LINE USER
+      // ========================================
+
       try {
         const lineResponse = await fetch(
           "https://api.line.me/v2/bot/message/push",
@@ -296,7 +389,8 @@ export default {
         );
 
         if (!lineResponse.ok) {
-          const lineErrorText = await lineResponse.text();
+          const lineErrorText =
+            await lineResponse.text();
 
           console.error(
             "LINE Push API error:",
@@ -308,8 +402,7 @@ export default {
             ...result,
             cardSent: false,
             cardMessage:
-              `บันทึกสมาชิกแล้ว แต่ส่งการ์ดไม่สำเร็จ ` +
-              `(HTTP ${lineResponse.status})`
+              `บันทึกสมาชิกแล้ว แต่ส่งการ์ดไม่สำเร็จ (HTTP ${lineResponse.status})`
           });
         }
 
@@ -320,7 +413,10 @@ export default {
         });
 
       } catch (lineError) {
-        console.error("LINE request failed:", lineError);
+        console.error(
+          "LINE request failed:",
+          lineError
+        );
 
         return json({
           ...result,
@@ -331,12 +427,12 @@ export default {
       }
 
     } catch (error) {
-      // ปิด try หลักให้ครบ เพื่อไม่ให้ Build error
       console.error("API error:", error);
 
       return json({
         status: "error",
-        message: "เกิดข้อผิดพลาดใน API Worker กรุณาตรวจสอบ Logs"
+        message:
+          "เกิดข้อผิดพลาดใน API Worker กรุณาตรวจสอบ Logs"
       }, 500);
     }
   }
