@@ -296,50 +296,7 @@ export default {
           wrap: true,
           margin: "xl"
         },
-        {
-          type: "box",
-          layout: "horizontal",
-          spacing: "sm",
-          margin: "xl",
-          contents: [
-            {
-              type: "text",
-              text: "🌿\nHEALTH",
-              size: "xxs",
-              color: "#63866A",
-              align: "center",
-              flex: 1,
-              wrap: true
-            },
-            {
-              type: "text",
-              text: "♡\nWELLNESS",
-              size: "xxs",
-              color: "#63866A",
-              align: "center",
-              flex: 1,
-              wrap: true
-            },
-            {
-              type: "text",
-              text: "☼\nBALANCE",
-              size: "xxs",
-              color: "#63866A",
-              align: "center",
-              flex: 1,
-              wrap: true
-            },
-            {
-              type: "text",
-              text: "♧\nHAPPINESS",
-              size: "xxs",
-              color: "#63866A",
-              align: "center",
-              flex: 1,
-              wrap: true
-            }
-          ]
-        },
+        
         {
           type: "text",
           text: "YOUR WELLNESS JOURNEY STARTS HERE",
