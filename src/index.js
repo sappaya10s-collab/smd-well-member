@@ -5,6 +5,7 @@ export default {
       "https://smd-well-member-site.sappaya10s.workers.dev";
 
     const origin = request.headers.get("Origin") || "";
+
     const corsHeaders = {
       "Access-Control-Allow-Origin": allowedOrigin,
       "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -24,11 +25,18 @@ export default {
       if (origin !== allowedOrigin) {
         return new Response(null, { status: 403 });
       }
-      return new Response(null, { status: 204, headers: corsHeaders });
+
+      return new Response(null, {
+        status: 204,
+        headers: corsHeaders
+      });
     }
 
     if (origin && origin !== allowedOrigin) {
-      return json({ status: "error", message: "Origin not allowed" }, 403);
+      return json({
+        status: "error",
+        message: "Origin not allowed"
+      }, 403);
     }
 
     if (request.method !== "POST") {
@@ -60,6 +68,7 @@ export default {
         }, 400);
       }
 
+      // 1. บันทึกข้อมูลผ่าน Google Apps Script
       const gasResponse = await fetch(env.GAS_URL, {
         method: "POST",
         headers: {
@@ -77,6 +86,7 @@ export default {
       const responseText = await gasResponse.text();
 
       let result;
+
       try {
         result = JSON.parse(responseText);
       } catch {
@@ -89,12 +99,12 @@ export default {
       if (!gasResponse.ok) {
         return json({
           status: "error",
-          message: result.message || "Google Apps Script request failed"
+          message: result.message ||
+            "Google Apps Script request failed"
         }, 502);
       }
 
-
-      // ส่งการ์ดเฉพาะเมื่อบันทึกสมาชิกสำเร็จ
+      // 2. ส่งการ์ดเฉพาะสมาชิกที่ลงทะเบียนสำเร็จ
       if (result.status !== "success") {
         return json(result);
       }
@@ -103,13 +113,17 @@ export default {
         return json({
           ...result,
           cardSent: false,
-          cardMessage: "ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN"
+          cardMessage:
+            "ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN"
         });
       }
 
-      const profileImageUrl = String(body.profileImageUrl || "").trim();
+      const profileImageUrl =
+        String(body.profileImageUrl || "").trim();
+
       const fullName = `${firstname} ${lastname}`;
 
+      // 3. สร้างเนื้อหาการ์ด Flex Message
       const cardContents = [
         {
           type: "text",
@@ -122,7 +136,7 @@ export default {
         }
       ];
 
-      // ใช้รูปโปรไฟล์ LINE ถ้ามี
+      // เพิ่มรูปโปรไฟล์เมื่อมี URL HTTPS
       if (/^https:\/\/.+/i.test(profileImageUrl)) {
         cardContents.push({
           type: "image",
@@ -131,7 +145,6 @@ export default {
           aspectRatio: "1:1",
           aspectMode: "cover",
           align: "center",
-          cornerRadius: "xxl",
           margin: "lg"
         });
       }
@@ -184,7 +197,9 @@ export default {
         },
         {
           type: "text",
-          text: "ขอบคุณที่ให้ความสนใจ\nเรายินดีต้อนรับคุณเข้าสู่ครอบครัวของเรา ♡",
+          text:
+            "ขอบคุณที่ให้ความสนใจ\n" +
+            "เรายินดีต้อนรับคุณเข้าสู่ครอบครัวของเรา ♡",
           size: "sm",
           color: "#69756C",
           align: "center",
@@ -197,10 +212,42 @@ export default {
           spacing: "sm",
           margin: "xl",
           contents: [
-            { type: "text", text: "🌿\nHEALTH", size: "xxs", color: "#63866A", align: "center", flex: 1, wrap: true },
-            { type: "text", text: "♡\nWELLNESS", size: "xxs", color: "#63866A", align: "center", flex: 1, wrap: true },
-            { type: "text", text: "☼\nBALANCE", size: "xxs", color: "#63866A", align: "center", flex: 1, wrap: true },
-            { type: "text", text: "♧\nHAPPINESS", size: "xxs", color: "#63866A", align: "center", flex: 1, wrap: true }
+            {
+              type: "text",
+              text: "🌿\nHEALTH",
+              size: "xxs",
+              color: "#63866A",
+              align: "center",
+              flex: 1,
+              wrap: true
+            },
+            {
+              type: "text",
+              text: "♡\nWELLNESS",
+              size: "xxs",
+              color: "#63866A",
+              align: "center",
+              flex: 1,
+              wrap: true
+            },
+            {
+              type: "text",
+              text: "☼\nBALANCE",
+              size: "xxs",
+              color: "#63866A",
+              align: "center",
+              flex: 1,
+              wrap: true
+            },
+            {
+              type: "text",
+              text: "♧\nHAPPINESS",
+              size: "xxs",
+              color: "#63866A",
+              align: "center",
+              flex: 1,
+              wrap: true
+            }
           ]
         },
         {
@@ -230,6 +277,7 @@ export default {
         }
       };
 
+      // 4. ส่งการ์ดไปยัง LINE User ID
       try {
         const lineResponse = await fetch(
           "https://api.line.me/v2/bot/message/push",
@@ -237,7 +285,8 @@ export default {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`
+              "Authorization":
+                `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`
             },
             body: JSON.stringify({
               to: lineUserId,
@@ -247,25 +296,48 @@ export default {
         );
 
         if (!lineResponse.ok) {
+          const lineErrorText = await lineResponse.text();
+
+          console.error(
+            "LINE Push API error:",
+            lineResponse.status,
+            lineErrorText
+          );
+
           return json({
             ...result,
             cardSent: false,
-            cardMessage: `บันทึกสมาชิกแล้ว แต่ LINE ส่งการ์ดไม่สำเร็จ (HTTP ${lineResponse.status})`
+            cardMessage:
+              `บันทึกสมาชิกแล้ว แต่ส่งการ์ดไม่สำเร็จ ` +
+              `(HTTP ${lineResponse.status})`
           });
         }
 
         return json({
           ...result,
-          cardSent: true
+          cardSent: true,
+          cardMessage: "ส่งการ์ดต้อนรับสำเร็จ"
         });
 
       } catch (lineError) {
+        console.error("LINE request failed:", lineError);
+
         return json({
           ...result,
           cardSent: false,
-          cardMessage: "บันทึกสมาชิกแล้ว แต่เชื่อมต่อ LINE เพื่อส่งการ์ดไม่สำเร็จ"
+          cardMessage:
+            "บันทึกสมาชิกแล้ว แต่เชื่อมต่อ LINE เพื่อส่งการ์ดไม่สำเร็จ"
         });
       }
+
+    } catch (error) {
+      // ปิด try หลักให้ครบ เพื่อไม่ให้ Build error
+      console.error("API error:", error);
+
+      return json({
+        status: "error",
+        message: "เกิดข้อผิดพลาดใน API Worker กรุณาตรวจสอบ Logs"
+      }, 500);
     }
   }
 };
